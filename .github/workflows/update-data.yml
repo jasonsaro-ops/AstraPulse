@@ -93,7 +93,8 @@ jobs:
             || fetch "https://api.open-notify.org/iss-now.json" data/iss.json \
             || echo '{}' > data/iss.json
 
-          fetch "https://api.open-notify.org/astros.json" data/people.json \
+          fetch "https://corquaid.github.io/international-space-station-APIs/JSON/people-in-space.json" data/people.json \
+            || fetch "https://api.open-notify.org/astros.json" data/people.json \
             || echo '{"number":0,"people":[]}' > data/people.json
 
           fetch "https://api.nasa.gov/planetary/apod?api_key=$KEY" data/apod.json || echo 'null' > data/apod.json
@@ -103,7 +104,6 @@ jobs:
           fetch "https://api.nasa.gov/DONKI/GST?startDate=$START7&api_key=$KEY" data/donki_gst.json || echo '[]' > data/donki_gst.json
           fetch "https://api.nasa.gov/EPIC/api/natural?api_key=$KEY" data/epic.json || echo '[]' > data/epic.json
 
-          # CelesTrak from Actions (server-side, with User-Agent)
           if eval $CURL "https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=json" -o /tmp/starlink.json; then
             COUNT=$(python3 -c "import json; d=json.load(open('/tmp/starlink.json')); print(len(d) if isinstance(d,list) else 0)" 2>/dev/null || echo null)
             echo "{\"count\": $COUNT, \"updated\": \"$NOW\"}" > data/starlink.json
