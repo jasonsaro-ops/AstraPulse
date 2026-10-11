@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="AstraPulse — Professional realtime dashboard for space flights, ISS, satellites, Starlink, agencies, astronauts and missions worldwide." />
+  <meta name="theme-color" content="#0a0e17" />
+  <title>AstraPulse — Spaceflight Command Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>" />
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <span class="logo-icon">◈</span>
+          <span class="logo-text">AstraPulse</span>
+        </div>
+        <button id="sidebar-toggle" class="icon-btn" aria-label="Toggle sidebar">☰</button>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#dashboard" class="nav-item active" data-view="dashboard">
+          <span class="nav-icon">◉</span> Dashboard
+        </a>
+        <a href="#launches" class="nav-item" data-view="launches">
+          <span class="nav-icon">🚀</span> Launches
+        </a>
+        <a href="#events" class="nav-item" data-view="events">
+          <span class="nav-icon">⚡</span> Events
+        </a>
+        <a href="#astronauts" class="nav-item" data-view="astronauts">
+          <span class="nav-icon">👨‍🚀</span> Astronauts
+        </a>
+        <a href="#agencies" class="nav-item" data-view="agencies">
+          <span class="nav-icon">🏛️</span> Agencies
+        </a>
+        <a href="#stations" class="nav-item" data-view="stations">
+          <span class="nav-icon">🛸</span> Stations
+        </a>
+        <a href="#vehicles" class="nav-item" data-view="vehicles">
+          <span class="nav-icon">🛰️</span> Vehicles
+        </a>
+        <a href="#satellites" class="nav-item" data-view="satellites">
+          <span class="nav-icon">📡</span> Satellites
+        </a>
+        <a href="#iss" class="nav-item" data-view="iss">
+          <span class="nav-icon">🌍</span> ISS Tracker
+        </a>
+        <a href="#asteroids" class="nav-item" data-view="asteroids">
+          <span class="nav-icon">☄️</span> Asteroids
+        </a>
+        <a href="#photos" class="nav-item" data-view="photos">
+          <span class="nav-icon">📷</span> NASA Photos
+        </a>
+        <a href="#search" class="nav-item" data-view="search">
+          <span class="nav-icon">🔍</span> Search
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="api-status" id="api-status">
+          <span class="status-dot"></span>
+          <span id="api-status-text">Connecting…</span>
+        </div>
+        <div class="refresh-info">
+          <span id="last-refresh">—</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main id="main" class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <h1 id="view-title">Dashboard</h1>
+          <p id="view-subtitle" class="subtitle">Realtime spaceflight overview</p>
+        </div>
+        <div class="topbar-right">
+          <div class="search-box">
+            <input type="search" id="global-search" placeholder="Search launches, astronauts, agencies…" autocomplete="off" />
+            <button id="search-btn" class="icon-btn" aria-label="Search">🔍</button>
+          </div>
+          <button id="refresh-btn" class="btn btn-ghost" title="Refresh data">↻ Refresh</button>
+          <div class="live-badge" id="live-badge">
+            <span class="pulse"></span> LIVE
+          </div>
+        </div>
+      </header>
+
+      <div id="content" class="content">
+        <!-- Views injected here -->
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+    <div class="modal-panel">
+      <button class="modal-close" id="modal-close" aria-label="Close">×</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
