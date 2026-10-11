@@ -467,9 +467,15 @@ tr:hover td { background: rgba(255,255,255,0.02); }
 tr:last-child td { border-bottom: none; }
 
 /* ===== Map ===== */
-#iss-map, #dashboard-map {
+#iss-map {
   height: 380px;
   border-radius: var(--radius);
+  background: var(--bg-elevated);
+  z-index: 1;
+}
+#dashboard-map {
+  height: 260px;
+  border-radius: 0;
   background: var(--bg-elevated);
   z-index: 1;
 }

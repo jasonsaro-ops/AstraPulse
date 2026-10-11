@@ -1,13 +1,12 @@
 /**
  * AstraPulse API Layer
- * Respects LL2 15 req/hour limit via request queue + cache
+ * 1) Prefer static JSON from /data/ (written by GitHub Actions — fast, no rate limits)
+ * 2) Fall back to live APIs with localStorage cache
  */
 
 const API = (() => {
   let requestCount = 0;
   let windowStart = Date.now();
-  const QUEUE = [];
-  let processing = false;
 
   function resetWindowIfNeeded() {
     if (Date.now() - windowStart > 60 * 60 * 1000) {
@@ -18,7 +17,7 @@ const API = (() => {
 
   function canRequest() {
     resetWindowIfNeeded();
-    return requestCount < CONFIG.LL2_LIMIT - 1; // leave 1 headroom
+    return requestCount < CONFIG.LL2_LIMIT - 1;
   }
 
   async function fetchJSON(url, options = {}) {
@@ -35,6 +34,17 @@ const API = (() => {
       throw err;
     }
     return res.json();
+  }
+
+  // Load pre-built JSON from repo (GitHub Actions). Fast same-origin.
+  async function staticData(filename) {
+    try {
+      const res = await fetch(`data/${filename}`, { cache: 'no-cache' });
+      if (!res.ok) return null;
+      return res.json();
+    } catch {
+      return null;
+    }
   }
 
   // Rate-limited LL2 fetch
@@ -87,12 +97,18 @@ const API = (() => {
   // ——— Public endpoints ———
 
   async function getUpcomingLaunches(limit = 12) {
+    const s = await staticData('launches_upcoming.json');
+    if (s?.results) return s;
     return ll2(`/launches/upcoming/?limit=${limit}&mode=detailed`, {
       ttl: CONFIG.CACHE_SHORT,
     });
   }
 
   async function getPreviousLaunches(limit = 12, offset = 0) {
+    if (offset === 0) {
+      const s = await staticData('launches_previous.json');
+      if (s?.results) return s;
+    }
     return ll2(`/launches/previous/?limit=${limit}&offset=${offset}&mode=list`, {
       ttl: CONFIG.CACHE_MEDIUM,
     });
@@ -109,11 +125,19 @@ const API = (() => {
   }
 
   async function getEvents(upcoming = true, limit = 12) {
+    if (upcoming) {
+      const s = await staticData('events.json');
+      if (s?.results) return s;
+    }
     const path = upcoming ? '/events/upcoming/' : '/events/';
     return ll2(`${path}?limit=${limit}`, { ttl: CONFIG.CACHE_MEDIUM });
   }
 
   async function getAgencies(limit = 30, offset = 0) {
+    if (offset === 0) {
+      const s = await staticData('agencies.json');
+      if (s?.results) return s;
+    }
     return ll2(`/agencies/?limit=${limit}&offset=${offset}&ordering=-total_launch_count`, {
       ttl: CONFIG.CACHE_LONG,
     });
@@ -124,6 +148,10 @@ const API = (() => {
   }
 
   async function getAstronauts(limit = 24, offset = 0, status = null) {
+    if (offset === 0 && !status) {
+      const s = await staticData('astronauts.json');
+      if (s?.results) return s;
+    }
     let path = `/astronauts/?limit=${limit}&offset=${offset}&ordering=-flights_count`;
     if (status) path += `&status=${status}`;
     return ll2(path, { ttl: CONFIG.CACHE_LONG });
@@ -140,29 +168,38 @@ const API = (() => {
   }
 
   async function getSpaceStations() {
+    const s = await staticData('stations.json');
+    if (s?.results) return s;
     return ll2('/space_stations/?limit=20', { ttl: CONFIG.CACHE_LONG });
   }
 
   async function getExpeditions(limit = 12) {
+    const s = await staticData('expeditions.json');
+    if (s?.results) return s;
     return ll2(`/expeditions/?limit=${limit}&ordering=-start`, {
       ttl: CONFIG.CACHE_MEDIUM,
     });
   }
 
   async function getDockings(limit = 12) {
+    const s = await staticData('dockings.json');
+    if (s?.results) return s;
     return ll2(`/docking_events/?limit=${limit}&ordering=-docking`, {
       ttl: CONFIG.CACHE_MEDIUM,
     });
   }
 
   async function getLauncherConfigs(limit = 24) {
+    const s = await staticData('vehicles.json');
+    if (s?.results) return s;
     return ll2(`/launcher_configurations/?limit=${limit}&ordering=-successful_launches`, {
       ttl: CONFIG.CACHE_LONG,
     });
   }
 
   async function getLaunchers(limit = 20) {
-    // reusable first stages
+    const s = await staticData('launchers.json');
+    if (s?.results) return s;
     return ll2(`/launchers/?limit=${limit}&ordering=-flights`, {
       ttl: CONFIG.CACHE_LONG,
     });
@@ -186,8 +223,9 @@ const API = (() => {
     const cacheKey = 'iss_pos';
     const cached = Cache.get(cacheKey);
     if (cached) return cached;
+
+    // Live first for near-realtime (lightweight)
     try {
-      // Prefer WhereTheISS for richer data
       const data = await fetchJSON(CONFIG.WHERE_ISS);
       const result = {
         latitude: data.latitude,
@@ -200,24 +238,54 @@ const API = (() => {
       };
       Cache.set(cacheKey, result, 25_000);
       return result;
-    } catch {
-      // fallback Open Notify
+    } catch { /* fall through */ }
+
+    // Static snapshot from Actions
+    const s = await staticData('iss.json');
+    if (s) {
+      if (s.latitude != null) {
+        const result = {
+          latitude: s.latitude,
+          longitude: s.longitude,
+          altitude: s.altitude,
+          velocity: s.velocity,
+          visibility: s.visibility,
+          timestamp: s.timestamp,
+          source: 'static',
+        };
+        Cache.set(cacheKey, result, 25_000);
+        return result;
+      }
+      if (s.iss_position) {
+        const result = {
+          latitude: parseFloat(s.iss_position.latitude),
+          longitude: parseFloat(s.iss_position.longitude),
+          altitude: null, velocity: null, visibility: null,
+          timestamp: s.timestamp, source: 'static',
+        };
+        Cache.set(cacheKey, result, 25_000);
+        return result;
+      }
+    }
+
+    try {
       const data = await fetchJSON(CONFIG.ISS_NOW);
       const result = {
         latitude: parseFloat(data.iss_position.latitude),
         longitude: parseFloat(data.iss_position.longitude),
-        altitude: null,
-        velocity: null,
-        visibility: null,
-        timestamp: data.timestamp,
-        source: 'open-notify',
+        altitude: null, velocity: null, visibility: null,
+        timestamp: data.timestamp, source: 'open-notify',
       };
       Cache.set(cacheKey, result, 25_000);
       return result;
+    } catch {
+      return null;
     }
   }
 
   async function getPeopleInSpace() {
+    const s = await staticData('people.json');
+    if (s?.people) return s;
     const cacheKey = 'people_space';
     const cached = Cache.get(cacheKey);
     if (cached) return cached;
@@ -227,12 +295,12 @@ const API = (() => {
   }
 
   async function getStarlinkCount() {
+    const s = await staticData('starlink.json');
+    if (s && s.count != null) return s;
     const cacheKey = 'starlink_meta';
     const cached = Cache.get(cacheKey);
     if (cached) return cached;
     try {
-      // Lightweight: only fetch a small sample or use a known public count endpoint
-      // CelesTrak full starlink is large; we only need approximate count for dashboard
       const data = await fetchJSON(CONFIG.CELESTRAK.starlink);
       const count = Array.isArray(data) ? data.length : 0;
       const result = { count, updated: Date.now() };
@@ -245,6 +313,8 @@ const API = (() => {
   }
 
   async function getStationsTLE() {
+    const s = await staticData('stations_tle.json');
+    if (Array.isArray(s)) return s;
     const cacheKey = 'stations_tle';
     const cached = Cache.get(cacheKey);
     if (cached) return cached;
@@ -258,6 +328,8 @@ const API = (() => {
   }
 
   async function getAPOD() {
+    const s = await staticData('apod.json');
+    if (s && s.url) return s;
     const cacheKey = 'nasa_apod';
     const cached = Cache.get(cacheKey);
     if (cached) return cached;
@@ -272,6 +344,8 @@ const API = (() => {
 
   // ——— NASA NeoWs: Near-Earth Objects this week ———
   async function getNeoFeed() {
+    const s = await staticData('neo.json');
+    if (s?.near_earth_objects) return s;
     const cacheKey = 'nasa_neo';
     const cached = Cache.get(cacheKey);
     if (cached) return cached;
@@ -292,6 +366,18 @@ const API = (() => {
 
   // ——— NASA DONKI: Space weather (CME, flares, storms) ———
   async function getSpaceWeather() {
+    const [cmeS, flrS, gstS] = await Promise.all([
+      staticData('donki_cme.json'),
+      staticData('donki_flr.json'),
+      staticData('donki_gst.json'),
+    ]);
+    if (cmeS || flrS || gstS) {
+      return {
+        cme: Array.isArray(cmeS) ? cmeS.slice(-8).reverse() : [],
+        flares: Array.isArray(flrS) ? flrS.slice(-8).reverse() : [],
+        storms: Array.isArray(gstS) ? gstS.slice(-5).reverse() : [],
+      };
+    }
     const cacheKey = 'nasa_donki';
     const cached = Cache.get(cacheKey);
     if (cached) return cached;
@@ -321,21 +407,30 @@ const API = (() => {
 
   // ——— NASA EPIC: latest Earth disk image ———
   async function getEPIC() {
-    const cacheKey = 'nasa_epic';
-    const cached = Cache.get(cacheKey);
-    if (cached) return cached;
-    try {
-      const list = await fetchJSON(`${CONFIG.NASA_EPIC}?api_key=${CONFIG.NASA_KEY}`);
-      if (!Array.isArray(list) || !list.length) return null;
+    const listS = await staticData('epic.json');
+    const list = Array.isArray(listS) ? listS : null;
+    if (list && list.length) {
       const latest = list[list.length - 1];
-      // image URL: https://epic.gsfc.nasa.gov/archive/natural/YYYY/MM/DD/png/NAME.png
-      const d = latest.date || latest.identifier || '';
       const datePart = (latest.date || '').slice(0, 10).replace(/-/g, '/');
       const name = latest.image || latest.identifier;
       const imageUrl = datePart && name
         ? `${CONFIG.NASA_EPIC_ARCHIVE}/${datePart}/png/${name}.png`
         : null;
-      const result = { ...latest, imageUrl, all: list.slice(-6).reverse() };
+      return { ...latest, imageUrl, all: list.slice(-6).reverse() };
+    }
+    const cacheKey = 'nasa_epic';
+    const cached = Cache.get(cacheKey);
+    if (cached) return cached;
+    try {
+      const live = await fetchJSON(`${CONFIG.NASA_EPIC}?api_key=${CONFIG.NASA_KEY}`);
+      if (!Array.isArray(live) || !live.length) return null;
+      const latest = live[live.length - 1];
+      const datePart = (latest.date || '').slice(0, 10).replace(/-/g, '/');
+      const name = latest.image || latest.identifier;
+      const imageUrl = datePart && name
+        ? `${CONFIG.NASA_EPIC_ARCHIVE}/${datePart}/png/${name}.png`
+        : null;
+      const result = { ...latest, imageUrl, all: live.slice(-6).reverse() };
       Cache.set(cacheKey, result, CONFIG.CACHE_MEDIUM);
       return result;
     } catch (e) {

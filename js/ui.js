@@ -114,18 +114,18 @@ const UI = (() => {
           </div>
           <div class="stat-card">
             <div class="stat-label">Next Launch</div>
-            <div class="stat-value" style="font-size:1.1rem">${next ? formatRelative(next.net) : '—'}</div>
+            <div class="stat-value" style="font-size:1.05rem">${next ? formatRelative(next.net) : '—'}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">Starlink Satellites</div>
+            <div class="stat-label">Starlink</div>
             <div class="stat-value success">${starlink.count ?? '—'}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">ISS Altitude</div>
-            <div class="stat-value">${iss?.altitude ? iss.altitude.toFixed(1) + ' km' : '—'}</div>
+            <div class="stat-label">ISS Alt</div>
+            <div class="stat-value">${iss?.altitude ? iss.altitude.toFixed(0) + ' km' : '—'}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">NEOs This Week</div>
+            <div class="stat-label">NEOs / 7d</div>
             <div class="stat-value warning">${neoList.length || '—'}</div>
           </div>
           <div class="stat-card">
@@ -135,97 +135,82 @@ const UI = (() => {
         </div>
 
         ${weatherItems.length ? `
-        <div class="card mb-2" style="margin-bottom:1.25rem">
-          <div class="card-header">
-            <span class="card-title">☀️ Space Weather (last 7 days)</span>
-            <span class="badge badge-info">DONKI</span>
-          </div>
-          <div class="card-body" style="display:flex;flex-wrap:wrap;gap:0.6rem">
+        <div class="card" style="margin-bottom:1rem">
+          <div class="card-body" style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;padding:0.75rem 1rem">
+            <span class="badge badge-info">☀️ Weather</span>
             ${weatherItems.map((w) => `
-              <div class="crew-chip" style="display:flex;align-items:center;gap:0.4rem">
-                <span class="badge ${w.cls}">${w.type}</span>
-                <span>${w.label}</span>
-                <span class="text-muted" style="font-size:0.75rem">${w.time ? formatDate(w.time) : ''}</span>
-              </div>
+              <span class="crew-chip" style="font-size:0.8rem">
+                <span class="badge ${w.cls}">${w.type}</span> ${w.label}
+              </span>
             `).join('')}
           </div>
         </div>
         ` : ''}
 
-        <div class="grid grid-2" style="margin-bottom:1.5rem">
+        <div class="section-title" style="margin-bottom:0.75rem">🚀 Upcoming Launches</div>
+        <div class="grid grid-3" id="upcoming-grid" style="margin-bottom:1.25rem">
+          ${launches.slice(0, 6).map(l => launchCardCompact(l)).join('') || empty('No upcoming launches')}
+        </div>
+
+        <div class="grid grid-2" style="margin-bottom:1.25rem">
           <div class="card">
-            <div class="card-header">
-              <span class="card-title">🌍 ISS Live Position</span>
+            <div class="card-header" style="padding:0.65rem 1rem">
+              <span class="card-title">🌍 ISS</span>
               <span class="text-muted mono" style="font-size:0.75rem" id="iss-coords">—</span>
             </div>
             <div class="card-body" style="padding:0">
-              <div id="dashboard-map"></div>
+              <div id="dashboard-map" style="height:260px"></div>
             </div>
           </div>
           <div class="card">
-            <div class="card-header">
-              <span class="card-title">👨‍🚀 Currently in Space</span>
+            <div class="card-header" style="padding:0.65rem 1rem">
+              <span class="card-title">👨‍🚀 In Space</span>
             </div>
-            <div class="card-body">
-              <div class="crew-list" id="crew-list">
+            <div class="card-body" style="padding:0.85rem 1rem">
+              <div class="crew-list">
                 ${(people.people || []).map(p =>
                   `<span class="crew-chip">${p.name} <span class="text-muted">· ${p.craft}</span></span>`
-                ).join('') || '<span class="text-muted">Loading…</span>'}
+                ).join('') || '<span class="text-muted">—</span>'}
               </div>
+              ${epic?.imageUrl ? `
+              <div style="margin-top:0.85rem;text-align:center">
+                <img src="${epic.imageUrl}" alt="EPIC" style="max-width:140px;border-radius:50%;box-shadow:0 0 20px rgba(56,189,248,0.15)" loading="lazy" />
+                <p class="text-muted" style="font-size:0.7rem;margin-top:0.35rem">EPIC · ${epic.date || ''}</p>
+              </div>` : ''}
             </div>
           </div>
         </div>
 
-        <div class="grid grid-2" style="margin-bottom:1.5rem">
-          ${epic?.imageUrl ? `
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title">🌎 Earth from DSCOVR (EPIC)</span>
-              <span class="text-muted" style="font-size:0.75rem">${epic.date || ''}</span>
-            </div>
-            <div class="card-body" style="text-align:center;padding:1rem">
-              <img src="${epic.imageUrl}" alt="EPIC Earth" style="max-width:100%;max-height:280px;border-radius:50%;box-shadow:0 0 40px rgba(56,189,248,0.2)" loading="lazy" onerror="this.parentElement.innerHTML='<p class=text-muted>Image unavailable</p>'" />
-              <p class="text-muted mt-1" style="font-size:0.8rem">${epic.caption || 'Full-disk Earth imagery'}</p>
+        <div class="card" style="margin-bottom:1rem">
+          <div class="card-header" style="padding:0.65rem 1rem">
+            <span class="card-title">☄️ Closest Asteroids</span>
+            <a href="#asteroids" class="text-accent" style="font-size:0.8rem;text-decoration:none">All →</a>
+          </div>
+          <div class="card-body" style="padding:0">
+            <div class="table-wrap" style="border:none;border-radius:0">
+              <table>
+                <thead><tr><th>Name</th><th>Miss (km)</th><th>Size</th><th></th></tr></thead>
+                <tbody>
+                  ${neoList.slice(0, 5).map((o) => {
+                    const approach = o.close_approach_data?.[0];
+                    const miss = approach?.miss_distance?.kilometers
+                      ? Number(approach.miss_distance.kilometers).toLocaleString(undefined, { maximumFractionDigits: 0 })
+                      : '—';
+                    const diam = o.estimated_diameter?.meters;
+                    const size = diam
+                      ? `${Math.round(diam.estimated_diameter_min)}–${Math.round(diam.estimated_diameter_max)} m`
+                      : '—';
+                    return `<tr>
+                      <td><strong>${o.name}</strong></td>
+                      <td class="mono">${miss}</td>
+                      <td class="mono" style="font-size:0.8rem">${size}</td>
+                      <td>${o.is_potentially_hazardous_asteroid ? '<span class="badge badge-hold">Hazard</span>' : ''}</td>
+                    </tr>`;
+                  }).join('') || '<tr><td colspan="4" class="text-muted">No NEO data</td></tr>'}
+                </tbody>
+              </table>
             </div>
           </div>
-          ` : '<div class="card"><div class="card-body"><p class="text-muted">EPIC Earth image loading…</p></div></div>'}
-
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title">☄️ Closest Asteroids This Week</span>
-              <a href="#asteroids" class="text-accent" style="font-size:0.8rem;text-decoration:none">View all →</a>
-            </div>
-            <div class="card-body" style="padding:0">
-              <div class="table-wrap" style="border:none;border-radius:0">
-                <table>
-                  <thead><tr><th>Name</th><th>Miss (km)</th><th>Size</th><th></th></tr></thead>
-                  <tbody>
-                    ${neoList.slice(0, 6).map((o) => {
-                      const approach = o.close_approach_data?.[0];
-                      const miss = approach?.miss_distance?.kilometers
-                        ? Number(approach.miss_distance.kilometers).toLocaleString(undefined, { maximumFractionDigits: 0 })
-                        : '—';
-                      const diam = o.estimated_diameter?.meters;
-                      const size = diam
-                        ? `${Math.round(diam.estimated_diameter_min)}–${Math.round(diam.estimated_diameter_max)} m`
-                        : '—';
-                      return `<tr>
-                        <td><strong>${o.name}</strong></td>
-                        <td class="mono">${miss}</td>
-                        <td class="mono" style="font-size:0.8rem">${size}</td>
-                        <td>${o.is_potentially_hazardous_asteroid ? '<span class="badge badge-hold">Hazard</span>' : ''}</td>
-                      </tr>`;
-                    }).join('') || '<tr><td colspan="4" class="text-muted">No NEO data</td></tr>'}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="section-title">🚀 Upcoming Launches</div>
-        <div class="grid grid-3" id="upcoming-grid">
-          ${launches.map(l => launchCard(l)).join('') || empty('No upcoming launches')}
         </div>
       `;
 
@@ -282,6 +267,26 @@ const UI = (() => {
           <div class="countdown mt-1">${formatRelative(l.net)}</div>
           <div class="text-muted" style="font-size:0.75rem">${formatDate(l.net)}</div>
           ${pad ? `<div class="text-muted" style="font-size:0.75rem">${pad}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  // Compact card for dashboard — no large image, faster paint
+  function launchCardCompact(l) {
+    const status = l.status || {};
+    const lsp = l.launch_service_provider?.name || l.lsp?.name || '—';
+    const rocket = l.rocket?.configuration?.name || '';
+    return `
+      <div class="item-card" data-launch-id="${l.id}" style="min-height:0">
+        <div class="item-card-body" style="padding:0.85rem 1rem">
+          <div class="item-card-title" style="font-size:0.9rem;margin-bottom:0.25rem">${l.name || 'Unnamed'}</div>
+          <div class="item-card-meta" style="margin-bottom:0.35rem">
+            ${statusBadge(status)}
+            <span class="text-muted">${lsp}</span>
+          </div>
+          <div class="countdown" style="font-size:0.95rem">${formatRelative(l.net)}</div>
+          <div class="text-muted" style="font-size:0.72rem">${formatDate(l.net)}${rocket ? ' · ' + rocket : ''}</div>
         </div>
       </div>
     `;
@@ -679,9 +684,15 @@ const UI = (() => {
       attributionControl: true,
     }).setView([pos.latitude, pos.longitude], 3);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap &copy; CARTO',
-      maxZoom: 18,
+    // Free tiles — no API key required (Esri World Dark Gray)
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles &copy; Esri',
+      maxZoom: 16,
+    }).addTo(map);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+      attribution: '',
+      maxZoom: 16,
+      opacity: 0.85,
     }).addTo(map);
 
     const icon = L.divIcon({
