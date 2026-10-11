@@ -16,7 +16,8 @@ const CONFIG = {
   // Open Notify / ISS
   ISS_NOW: 'https://api.open-notify.org/iss-now.json',
   PEOPLE_IN_SPACE: 'https://api.open-notify.org/astros.json',
-  // Alternative realtime ISS
+  // Actively maintained people-in-space (ISS + CSS + transit)
+  PEOPLE_IN_SPACE_LIVE: 'https://corquaid.github.io/international-space-station-APIs/JSON/people-in-space.json',
   WHERE_ISS: 'https://api.wheretheiss.at/v1/satellites/25544',
 
   // CelesTrak (public, be respectful)

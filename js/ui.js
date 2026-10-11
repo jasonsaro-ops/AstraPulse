@@ -113,8 +113,13 @@ const UI = (() => {
             <div class="stat-value accent">${people.number ?? '—'}</div>
           </div>
           <div class="stat-card">
+            <div class="stat-label">On ISS</div>
+            <div class="stat-value accent">${people.iss_count ?? (people.people || []).filter(p => p.iss).length || '—'}</div>
+          </div>
+          <div class="stat-card">
             <div class="stat-label">Next Launch</div>
-            <div class="stat-value" style="font-size:1.05rem">${next ? formatRelative(next.net) : '—'}</div>
+            <div class="stat-value" style="font-size:0.95rem;line-height:1.25">${next ? formatRelative(next.net) : '—'}</div>
+            ${next ? `<div class="text-muted truncate" style="font-size:0.7rem;margin-top:2px" title="${(next.name || '').replace(/"/g, '')}">${next.name || ''}</div>` : ''}
           </div>
           <div class="stat-card">
             <div class="stat-label">Starlink</div>
@@ -127,10 +132,6 @@ const UI = (() => {
           <div class="stat-card">
             <div class="stat-label">NEOs / 7d</div>
             <div class="stat-value warning">${neoList.length || '—'}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Hazardous</div>
-            <div class="stat-value" style="color:var(--danger)">${neoHazard}</div>
           </div>
         </div>
 
@@ -169,7 +170,7 @@ const UI = (() => {
             <div class="card-body" style="padding:0.85rem 1rem">
               <div class="crew-list">
                 ${(people.people || []).map(p =>
-                  `<span class="crew-chip">${p.name} <span class="text-muted">· ${p.craft}</span></span>`
+                  `<span class="crew-chip">${p.name} <span class="text-muted">· ${p.craft}${p.iss ? ' · ISS' : ''}</span></span>`
                 ).join('') || '<span class="text-muted">—</span>'}
               </div>
               ${epic?.imageUrl ? `

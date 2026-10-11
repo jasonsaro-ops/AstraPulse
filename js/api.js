@@ -98,10 +98,33 @@ const API = (() => {
 
   async function getUpcomingLaunches(limit = 12) {
     const s = await staticData('launches_upcoming.json');
-    if (s?.results) return s;
-    return ll2(`/launches/upcoming/?limit=${limit}&mode=detailed`, {
-      ttl: CONFIG.CACHE_SHORT,
-    });
+    if (s?.results?.length) {
+      // Ensure chronological order by NET
+      s.results.sort((a, b) => new Date(a.net) - new Date(b.net));
+      return s;
+    }
+    // Live: try production then lldev; sort by NET
+    try {
+      const data = await ll2(`/launches/upcoming/?limit=${limit}&mode=detailed`, {
+        ttl: CONFIG.CACHE_SHORT,
+      });
+      if (data?.results?.length) {
+        data.results.sort((a, b) => new Date(a.net) - new Date(b.net));
+        return data;
+      }
+    } catch { /* fall through */ }
+    try {
+      const data = await ll2(`/launches/upcoming/?limit=${limit}&mode=detailed`, {
+        ttl: CONFIG.CACHE_SHORT,
+        forceDev: true,
+      });
+      if (data?.results?.length) {
+        data.results.sort((a, b) => new Date(a.net) - new Date(b.net));
+      }
+      return data || { results: [] };
+    } catch {
+      return { results: [] };
+    }
   }
 
   async function getPreviousLaunches(limit = 12, offset = 0) {
@@ -284,14 +307,59 @@ const API = (() => {
   }
 
   async function getPeopleInSpace() {
+    // Prefer corquaid maintained feed (ISS + CSS + in-transit)
+    const normalize = (data) => {
+      if (!data) return null;
+      const people = (data.people || []).map((p) => ({
+        name: p.name,
+        craft: p.spacecraft || p.craft || (p.iss ? 'ISS' : '—'),
+        country: p.country,
+        agency: p.agency,
+        iss: p.iss === true || (p.craft || p.spacecraft || '').toUpperCase().includes('ISS'),
+        image: p.image,
+      }));
+      const issCount = people.filter((p) => p.iss).length;
+      return {
+        number: data.number ?? people.length,
+        iss_count: issCount || data.iss_count,
+        people,
+        source: data.source || 'live',
+        expedition: data.iss_expedition,
+      };
+    };
+
     const s = await staticData('people.json');
-    if (s?.people) return s;
+    if (s?.people?.length) return normalize({ ...s, source: 'static' });
+
     const cacheKey = 'people_space';
     const cached = Cache.get(cacheKey);
     if (cached) return cached;
-    const data = await fetchJSON(CONFIG.PEOPLE_IN_SPACE);
-    Cache.set(cacheKey, data, CONFIG.CACHE_MEDIUM);
-    return data;
+
+    try {
+      const data = await fetchJSON(CONFIG.PEOPLE_IN_SPACE_LIVE);
+      const result = normalize(data);
+      if (result) {
+        Cache.set(cacheKey, result, CONFIG.CACHE_MEDIUM);
+        return result;
+      }
+    } catch { /* fall through */ }
+
+    try {
+      const data = await fetchJSON(CONFIG.PEOPLE_IN_SPACE);
+      const result = normalize({
+        number: data.number,
+        people: (data.people || []).map((p) => ({
+          name: p.name,
+          craft: p.craft,
+          iss: (p.craft || '').toUpperCase().includes('ISS'),
+        })),
+        source: 'open-notify',
+      });
+      Cache.set(cacheKey, result, CONFIG.CACHE_MEDIUM);
+      return result;
+    } catch {
+      return { number: '—', iss_count: '—', people: [] };
+    }
   }
 
   async function getStarlinkCount() {
@@ -320,9 +388,13 @@ const API = (() => {
     if (cached) return cached;
     try {
       const data = await fetchJSON(`${CONFIG.NASA_APOD}?api_key=${CONFIG.NASA_KEY}`);
-      Cache.set(cacheKey, data, CONFIG.CACHE_LONG);
-      return data;
-    } catch {
+      if (data && data.url) {
+        Cache.set(cacheKey, data, CONFIG.CACHE_LONG);
+        return data;
+      }
+      return null;
+    } catch (e) {
+      // NASA APOD often returns 503 — silent fail, no console spam
       return null;
     }
   }
