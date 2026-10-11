@@ -295,36 +295,21 @@ const API = (() => {
   }
 
   async function getStarlinkCount() {
+    // CelesTrak returns 403 to browsers. Only use data/ from GitHub Actions.
     const s = await staticData('starlink.json');
     if (s && s.count != null) return s;
-    const cacheKey = 'starlink_meta';
-    const cached = Cache.get(cacheKey);
+    const cached = Cache.get('starlink_meta');
     if (cached) return cached;
-    try {
-      const data = await fetchJSON(CONFIG.CELESTRAK.starlink);
-      const count = Array.isArray(data) ? data.length : 0;
-      const result = { count, updated: Date.now() };
-      Cache.set(cacheKey, result, CONFIG.CACHE_LONG);
-      return result;
-    } catch (e) {
-      console.warn('Starlink fetch failed', e);
-      return { count: null, updated: null };
-    }
+    return { count: null, updated: null };
   }
 
   async function getStationsTLE() {
+    // Same: never call CelesTrak from the browser
     const s = await staticData('stations_tle.json');
-    if (Array.isArray(s)) return s;
-    const cacheKey = 'stations_tle';
-    const cached = Cache.get(cacheKey);
+    if (Array.isArray(s) && s.length) return s;
+    const cached = Cache.get('stations_tle');
     if (cached) return cached;
-    try {
-      const data = await fetchJSON(CONFIG.CELESTRAK.stations);
-      Cache.set(cacheKey, data, CONFIG.CACHE_MEDIUM);
-      return data;
-    } catch {
-      return [];
-    }
+    return [];
   }
 
   async function getAPOD() {
