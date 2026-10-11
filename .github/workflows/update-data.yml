@@ -1,0 +1,133 @@
+name: Update Space Data
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  update-data:
+    name: Fetch space feeds
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch feeds into data/
+        env:
+          NASA_KEY: ${{ secrets.NASA_API_KEY }}
+        run: |
+          set +e
+          mkdir -p data
+          KEY="${NASA_KEY:-FkX1PuggUJq8aVhg1ZJuffZc3TsPfLa90DWLF7I1}"
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          TODAY=$(date -u +%Y-%m-%d)
+          START7=$(date -u -d '7 days ago' +%Y-%m-%d)
+          END7=$(date -u -d '+7 days' +%Y-%m-%d)
+          UA="AstraPulse/1.0 (GitHub Actions; space dashboard)"
+          CURL="curl -fsSL --max-time 45 -A \"$UA\""
+
+          echo "=== Fetch $NOW ==="
+          LL="https://ll.thespacedevs.com/2.3.0"
+          LLDEV="https://lldev.thespacedevs.com/2.3.0"
+
+          fetch() {
+            local url="$1" out="$2"
+            if eval $CURL "$url" -o "$out"; then
+              echo "OK $out"
+            else
+              echo "FAIL $out"
+              return 1
+            fi
+          }
+
+          fetch "$LL/launches/upcoming/?limit=20&mode=detailed" data/launches_upcoming.json \
+            || fetch "$LLDEV/launches/upcoming/?limit=20&mode=detailed" data/launches_upcoming.json \
+            || echo '{"results":[]}' > data/launches_upcoming.json
+
+          fetch "$LL/launches/previous/?limit=16&mode=list" data/launches_previous.json \
+            || fetch "$LLDEV/launches/previous/?limit=16&mode=list" data/launches_previous.json \
+            || echo '{"results":[]}' > data/launches_previous.json
+
+          fetch "$LL/events/upcoming/?limit=16" data/events.json \
+            || fetch "$LLDEV/events/upcoming/?limit=16" data/events.json \
+            || echo '{"results":[]}' > data/events.json
+
+          fetch "$LL/astronauts/?limit=24&ordering=-flights_count" data/astronauts.json \
+            || fetch "$LLDEV/astronauts/?limit=24&ordering=-flights_count" data/astronauts.json \
+            || echo '{"results":[]}' > data/astronauts.json
+
+          fetch "$LL/agencies/?limit=30&ordering=-total_launch_count" data/agencies.json \
+            || fetch "$LLDEV/agencies/?limit=30&ordering=-total_launch_count" data/agencies.json \
+            || echo '{"results":[]}' > data/agencies.json
+
+          fetch "$LL/space_stations/?limit=20" data/stations.json \
+            || fetch "$LLDEV/space_stations/?limit=20" data/stations.json \
+            || echo '{"results":[]}' > data/stations.json
+
+          fetch "$LL/launcher_configurations/?limit=16&ordering=-successful_launches" data/vehicles.json \
+            || fetch "$LLDEV/launcher_configurations/?limit=16&ordering=-successful_launches" data/vehicles.json \
+            || echo '{"results":[]}' > data/vehicles.json
+
+          fetch "$LL/launchers/?limit=12&ordering=-flights" data/launchers.json \
+            || fetch "$LLDEV/launchers/?limit=12&ordering=-flights" data/launchers.json \
+            || echo '{"results":[]}' > data/launchers.json
+
+          fetch "$LL/expeditions/?limit=8&ordering=-start" data/expeditions.json \
+            || echo '{"results":[]}' > data/expeditions.json
+
+          fetch "$LL/docking_events/?limit=8&ordering=-docking" data/dockings.json \
+            || echo '{"results":[]}' > data/dockings.json
+
+          fetch "https://api.wheretheiss.at/v1/satellites/25544" data/iss.json \
+            || fetch "https://api.open-notify.org/iss-now.json" data/iss.json \
+            || echo '{}' > data/iss.json
+
+          fetch "https://api.open-notify.org/astros.json" data/people.json \
+            || echo '{"number":0,"people":[]}' > data/people.json
+
+          fetch "https://api.nasa.gov/planetary/apod?api_key=$KEY" data/apod.json || echo 'null' > data/apod.json
+          fetch "https://api.nasa.gov/neo/rest/v1/feed?start_date=$TODAY&end_date=$END7&api_key=$KEY" data/neo.json || echo 'null' > data/neo.json
+          fetch "https://api.nasa.gov/DONKI/CME?startDate=$START7&api_key=$KEY" data/donki_cme.json || echo '[]' > data/donki_cme.json
+          fetch "https://api.nasa.gov/DONKI/FLR?startDate=$START7&api_key=$KEY" data/donki_flr.json || echo '[]' > data/donki_flr.json
+          fetch "https://api.nasa.gov/DONKI/GST?startDate=$START7&api_key=$KEY" data/donki_gst.json || echo '[]' > data/donki_gst.json
+          fetch "https://api.nasa.gov/EPIC/api/natural?api_key=$KEY" data/epic.json || echo '[]' > data/epic.json
+
+          # CelesTrak from Actions (server-side, with User-Agent)
+          if eval $CURL "https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=json" -o /tmp/starlink.json; then
+            COUNT=$(python3 -c "import json; d=json.load(open('/tmp/starlink.json')); print(len(d) if isinstance(d,list) else 0)" 2>/dev/null || echo null)
+            echo "{\"count\": $COUNT, \"updated\": \"$NOW\"}" > data/starlink.json
+            echo "OK starlink count=$COUNT"
+          else
+            echo '{"count":null,"updated":null}' > data/starlink.json
+            echo "FAIL starlink"
+          fi
+
+          fetch "https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=json" data/stations_tle.json \
+            || echo '[]' > data/stations_tle.json
+
+          echo "{\"updated\": \"$NOW\", \"source\": \"github-actions\"}" > data/meta.json
+          ls -la data/
+          du -sh data/
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "data: refresh space feeds $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push
+          fi
